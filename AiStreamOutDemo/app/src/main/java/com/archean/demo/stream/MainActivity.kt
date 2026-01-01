@@ -379,16 +379,16 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
             //提示滚动按钮展示时，不自动滚动到底部
             if (isAutoScrollBottom) {
                 binding.recyclerView.post {
-                    if (oldStateType != stateType) {
-                        //判断rv是否已经滑动到底部，没有则滑动到底部
-//                    LogHelper.e("updateItem", "state:" + stateType + " scrollToBottom")
-                        binding.recyclerView.scrollToBottom()
-                    } else {
-                        if (binding.recyclerView.canScrollVertically(1)) {
-//                        LogHelper.e("updateItem", "state:" + stateType + " onScrollToLastItemBottom")
-                            binding.recyclerView.onScrollToLastItemBottom()
-                        }
-                    }
+//                    if (oldStateType != stateType) {
+//                        //判断rv是否已经滑动到底部，没有则滑动到底部
+////                    LogHelper.e("updateItem", "state:" + stateType + " scrollToBottom")
+//                        binding.recyclerView.scrollToBottom()
+//                    } else {
+//                        if (binding.recyclerView.canScrollVertically(1)) {
+////                        LogHelper.e("updateItem", "state:" + stateType + " onScrollToLastItemBottom")
+//                            binding.recyclerView.onScrollToLastItemBottom()
+//                        }
+//                    }
                 }
             } else {
                 //就算当前不需要自动滑动到底部，当有新的提问时，也需要滑动到底部
