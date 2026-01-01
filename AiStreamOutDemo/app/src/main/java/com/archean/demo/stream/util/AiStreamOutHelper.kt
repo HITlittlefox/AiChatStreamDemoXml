@@ -238,7 +238,7 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
                 LogHelper.e("AiHttpRequest", "length:  out" + replyOutBuilder.length + " replyBuilder" + replyBuilder.length)
                 if (replyOutBuilder.length < replyBuilder.length) {
                     val nowChar = replyBuilder[replyOutBuilder.length]
-//                    LogHelper.e("outStream", nowChar.toString())
+                    LogHelper.e("outStream", "replyOutBuilder.length=${replyOutBuilder.length}")
                     replyOutBuilder.append(nowChar)
 
 //                    val pattern1 = Regex("([*:：])\\s*\n")

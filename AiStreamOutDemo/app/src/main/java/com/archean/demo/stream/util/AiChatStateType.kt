@@ -34,6 +34,8 @@ annotation class AiChatStateType {
 
         /**
          * 输出结束
+         *
+         * 4经历了打字机， 会变成5
          */
         const val out_end="5"
 

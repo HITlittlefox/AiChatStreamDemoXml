@@ -71,7 +71,7 @@ object AppKtx {
      */
     fun getVersionName(context: Context?): String {
         context ?: return "1"
-        return context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        return context.packageManager.getPackageInfo(context.packageName, 0).versionName.toString()
     }
 
     fun getAppName(context: Context?): String {

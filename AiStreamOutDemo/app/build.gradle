@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace 'com.archean.demo.stream'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.archean.demo.stream"
         minSdk 23
-        targetSdk 34
+        targetSdk 35
         versionCode 1
         versionName "1.0"
 
@@ -114,4 +114,6 @@ dependencies {
     implementation 'org.commonmark:commonmark:0.22.0'
 
     implementation 'org.commonmark:commonmark-ext-gfm-tables:0.22.0'
+
+    implementation 'com.google.android.material:material:1.11.0'
 }

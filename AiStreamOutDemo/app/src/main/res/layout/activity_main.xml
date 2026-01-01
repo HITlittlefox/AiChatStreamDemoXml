@@ -19,6 +19,25 @@
             android:layout_height="match_parent"
             android:background="#efefef">
 
+            <com.google.android.material.bottomnavigation.BottomNavigationView
+                android:id="@+id/bottom_navigation_view"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/bg_bottom_navigation_rounded"
+                android:elevation="8dp"
+                app:itemIconTint="@color/selector_bottom_nav_color"
+                app:itemTextColor="@color/selector_bottom_nav_color"
+                app:labelVisibilityMode="labeled"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                android:visibility="gone"
+                app:menu="@menu/menu_bottom_nav"
+                app:paddingBottomSystemWindowInsets="false" />
+
             <com.archeanx.libx.widget.XAppTitleView
                 android:id="@+id/main_title_view"
                 android:layout_width="match_parent"

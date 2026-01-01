@@ -7,6 +7,9 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
@@ -35,6 +38,7 @@ import com.archeanx.libx.util.ToastUtil
 import com.archeanx.libx.util.isTrue
 import com.archeanx.libx.util.setOnClickNoDouble
 import com.archeanx.libx.util.toDefault
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.gyf.immersionbar.ImmersionBar
 import com.scwang.smart.refresh.layout.SmartRefreshLayout
 import java.util.UUID
@@ -75,7 +79,54 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        initBottomNavigationForAndroid15()
+
+    }
+
+    @Deprecated("not use, have gone")
+    private fun initBottomNavigationForAndroid15(){
         ImmersionBar.with(this).transparentStatusBar().statusBarDarkFont(true).keyboardEnable(true).init()
+
+        // V1 强制消费
+        val bottomNavigationView = binding.bottomNavigationView
+        // 强制禁用所有系统内边距对 BottomNavigationView 的影响
+        // 这将覆盖 Material 库默认设置的监听器
+        ViewCompat.setOnApplyWindowInsetsListener(bottomNavigationView) { v, insets ->
+            // 确保你的 BottomNavigationView 不受任何系统内边距影响
+            // 这里的关键是返回 CONSUMED，告诉系统这个 View 已经处理了内边距，
+            // 并且我们在处理中只应用了 0 填充。
+            v.setPadding(0, 0, 0, 0)
+
+            // 消费掉内边距，阻止它们向下传递给 BottomNavigationView 的子视图
+            WindowInsetsCompat.CONSUMED
+        }
+
+        // V2 只移除 BottomNavigationView 自动应用的内边距，然后手动将系统导航栏的内边距重新应用到 padding 上，并加上你想要的 24dp 间距。
+//        val bottomNavigationView = findViewById<BottomNavigationView>(R.id.bottom_navigation_view)
+//        val customMargin = 24 // 你想要的底部间距 24dp
+//
+//        ViewCompat.setOnApplyWindowInsetsListener(bottomNavigationView) { v, insets ->
+//            // 1. 获取系统提供的底部内边距 (System Navigation Bar Inset)
+//            val systemBottomInset = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+//
+//            // 2. 计算最终的 paddingBottom:
+//            //    系统内边距 (systemBottomInset) + 你的自定义间距 (customMargin)
+//            val finalPaddingBottom =
+//                systemBottomInset + (customMargin * resources.displayMetrics.density).toInt() // 转换为像素
+//
+//            // 3. 应用新的填充，并保持左右上为 0
+//            v.updatePadding(
+//                left = 0,
+//                top = 0,
+//                right = 0,
+//                bottom = finalPaddingBottom // 使用计算后的值
+//            )
+//
+//            // 4. 返回 CONSUMED，表示我们已经处理了底部的系统栏内边距。
+//            //    注意：为了确保 BottomNavigationView 不处理其他类型（如 IME）的内边距，你可能需要更复杂的逻辑。
+//            //    但对于只处理底部导航栏来说，CONSUMED 是最安全的做法。
+//            WindowInsetsCompat.CONSUMED
+//        }
     }
 
 
