@@ -23,7 +23,7 @@ import java.net.Proxy
 import java.util.concurrent.TimeUnit
 
 
-class AiHttpRequest {
+open class AiHttpRequest {
 
     private var mRequestCall: Call? = null
 
@@ -58,11 +58,11 @@ class AiHttpRequest {
     /**
      * 取消
      */
-    fun cancel() {
+    open fun cancel() {
         mRequestCall?.cancel()
     }
 
-    fun isRequesting(): Boolean {
+    open fun isRequesting(): Boolean {
         return mRequestCall != null && mRequestCall?.isExecuted().toDefault(false) && !mRequestCall?.isCanceled().toDefault(true)
     }
 
@@ -73,7 +73,7 @@ class AiHttpRequest {
      * @param groupId 对话id
      * @param question 提问内容
      */
-    fun onRequest(question: String): Call {
+    open fun onRequest(question: String): Call? {
         //这是硅基流动的
         val hostUrl = "https://api.siliconflow.cn/v1/chat/completions"
         // 构建包含参数的 URL

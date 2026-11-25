@@ -69,11 +69,16 @@ ai.api.key=你的硅基流动APIKey
 
 密钥在构建时通过 `buildConfigField` 注入 `BuildConfig.AI_API_KEY`，源码中不保存明文；换机器时补上这一行即可。
 
+## 模拟数据（调试用）
+
+没有 API Key 也能看完整效果：**长按标题栏**会依次播放一批模拟问答（普通文本、Markdown、表格、CardView），数据会经过 `AiStreamOutHelper`，状态切换和打字机逻辑与真实请求一致。直接发送包含关键词的内容（如「你好」「介绍」「表格」「卡片」）也会命中对应脚本，不会发起真实请求。该入口仅在 Debug 构建生效，脚本与关键词在 `AiMockScripts.batch` 中维护。
+
 ## 代码位置
 
 | 关注点 | 文件 |
 | --- | --- |
 | 请求构造与 SSE 解析 | [AiHttpRequest.kt](app/src/main/java/com/aichatstreamdemoxml/http/AiHttpRequest.kt) |
+| 模拟请求与脚本 | [AiMockHttpRequest.kt](app/src/main/java/com/aichatstreamdemoxml/http/AiMockHttpRequest.kt) |
 | 流式状态机与打字机 | [AiStreamOutHelper.kt](app/src/main/java/com/aichatstreamdemoxml/util/AiStreamOutHelper.kt) |
 | 页面逻辑与交互 | [MainActivity.kt](app/src/main/java/com/aichatstreamdemoxml/MainActivity.kt) |
 | 多类型列表 | [AiChatAdapter.kt](app/src/main/java/com/aichatstreamdemoxml/AiChatAdapter.kt) |

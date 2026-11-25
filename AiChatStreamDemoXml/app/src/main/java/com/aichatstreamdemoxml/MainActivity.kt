@@ -4,6 +4,8 @@ package com.aichatstreamdemoxml
 import android.app.Dialog
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -16,6 +18,8 @@ import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.aichatstreamdemoxml.databinding.ActivityMainBinding
 import com.aichatstreamdemoxml.dto.AiChatMessageDto
 import com.aichatstreamdemoxml.http.AiHttpRequest
+import com.aichatstreamdemoxml.http.AiMockHttpRequest
+import com.aichatstreamdemoxml.http.AiMockScripts
 import com.aichatstreamdemoxml.util.AiChatStateType
 import com.aichatstreamdemoxml.util.AiStreamOutHelper
 import com.aichatstreamdemoxml.util.AppKtx
@@ -76,6 +80,20 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
      * 流式输出辅助类
      */
     private val mAiStreamOutHelper by lazy { AiStreamOutHelper(this) }
+
+    /**
+     * 模拟请求，仅用于调试演示
+     */
+    private val mMockHttpRequest by lazy { AiMockHttpRequest() }
+
+    private val uiHandler by lazy { Handler(Looper.getMainLooper()) }
+
+    /**
+     * 模拟批次：问题列表、当前进度、是否正在执行
+     */
+    private var mockQuestions: List<String> = emptyList()
+    private var mockIndex = 0
+    private var isMockRunning = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -257,8 +275,9 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
                 }
             }
             complete = {
-                mAiStreamOutHelper.mAiChatMessageDto?.let { msgDto ->
-                    //完成
+                //模拟批次：一条输出结束后稍作停顿，继续下一条
+                if (isMockRunning) {
+                    uiHandler.postDelayed({ submitNextMock() }, 800)
                 }
             }
             error = {
@@ -271,8 +290,16 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
 
 
         binding.titleTv.setOnClickNoDouble {
+            isMockRunning = false
+            mMockHttpRequest.cancel()
             mAiHttpRequest.cancel()
             mAiStreamOutHelper.reset()
+        }
+
+        //隐藏入口：长按标题播放一批模拟问答（仅 Debug 构建生效）
+        binding.titleTv.setOnLongClickListener {
+            startMockBatch()
+            true
         }
     }
 
@@ -300,7 +327,7 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
         //节流处理
         if (!AppKtx.isThrottle(500)) return false
         //请求状态处理
-        if (mAiHttpRequest.isRequesting() || mAiStreamOutHelper.isRequesting()) return false
+        if (mAiHttpRequest.isRequesting() || mMockHttpRequest.isRequesting() || mAiStreamOutHelper.isRequesting()) return false
 
         if (content.isNullOrEmpty()) {
             ToastUtil.show("请输入问题")
@@ -324,8 +351,11 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
         }
 
 
+        //模拟批次进行中，或 Debug 下命中脚本关键词时走 Mock 请求，其余情况走真实网络
+        val hitMockScript = BuildConfig.DEBUG && AiMockScripts.match(content) != null
+        val request = if (isMockRunning || hitMockScript) mMockHttpRequest else mAiHttpRequest
         //输出交给 AiStreamOutHelper 统一处理
-        mAiStreamOutHelper.onInit(msgDto!!, mAiHttpRequest)
+        mAiStreamOutHelper.onInit(msgDto!!, request)
 
 
         //关闭软键盘
@@ -333,9 +363,38 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
 
         uiDelayShow({
             //需要判断有选中的会话，如果没有，则是需要生成新的对话id和对话内容
-            mAiHttpRequest.onRequest(content)
+            request.onRequest(content)
         }, 300)
         return true
+    }
+
+    /**
+     * 隐藏入口：长按标题触发一批模拟问答
+     */
+    private fun startMockBatch() {
+        if (!BuildConfig.DEBUG) return
+        if (isMockRunning || mAiHttpRequest.isRequesting() || mAiStreamOutHelper.isRequesting()) return
+        mockQuestions = AiMockScripts.batch.map { it.question }
+        mockIndex = 0
+        isMockRunning = true
+        submitNextMock()
+    }
+
+    /**
+     * 提交模拟批次中的下一条问题
+     */
+    private fun submitNextMock() {
+        if (!isMockRunning) return
+        if (mockIndex >= mockQuestions.size) {
+            isMockRunning = false
+            mockQuestions = emptyList()
+            return
+        }
+        if (!onSubmitQuestion(mockQuestions[mockIndex])) {
+            isMockRunning = false
+            return
+        }
+        mockIndex++
     }
 
     private fun updateItem(item: AiChatMessageDto, @AiChatStateType stateType: String? = null) {
@@ -403,6 +462,9 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
 
 
     override fun onDestroy() {
+        isMockRunning = false
+        mMockHttpRequest.cancel()
+        uiHandler.removeCallbacksAndMessages(null)
         mAiHttpRequest.cancel()
         super.onDestroy()
     }
