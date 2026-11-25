@@ -3,6 +3,7 @@ package com.aichatstreamdemoxml.http
 import android.os.Handler
 import android.os.Looper
 import okhttp3.Call
+import kotlin.random.Random
 
 /**
  * 模拟请求：不发起网络请求，按脚本逐块回放流式数据。
@@ -34,24 +35,56 @@ class AiMockHttpRequest : AiHttpRequest() {
         playing = true
 
         val steps = mutableListOf<MockStep>()
+        if (script.complex) {
+            val normalCount = Random.nextInt(2, 5)
+            val interactionCount = Random.nextInt(2, 5)
+            val repeatCount = Random.nextInt(2, 4)
+            repeat(repeatCount) { round ->
+                repeat(normalCount) { index ->
+                    "第${round + 1}轮普通流 ${index + 1}/$normalCount：这段文本由多个 SSE delta 分片组成，用于检查打字机是否连续输出。"
+                        .chunked(5).forEach { steps.add(MockStep(35L, replyDto(it, AiResponseDto.StreamType.Common, emptyList()))) }
+                }
+                repeat(interactionCount) { index ->
+                    val ids = listOf("device_light_living_room", "device_ac_bedroom", "device_curtain_living_room")
+                    val sentence = "第${round + 1}轮高交互流 ${index + 1}/$interactionCount：发现关联设备。"
+                    sentence.chunked(5).forEachIndexed { chunkIndex, chunk ->
+                        steps.add(MockStep(35L, replyDto(
+                            chunk,
+                            AiResponseDto.StreamType.HighTouchInteraction,
+                            if (chunkIndex == 0) ids else emptyList()
+                        )))
+                    }
+                }
+            }
+            playSteps(script.question, steps)
+            return
+        }
         script.reasoning.chunked(script.chunkSize).forEach {
             steps.add(MockStep(script.thinkDelay, reasoningDto(it)))
         }
-        script.reply.chunked(script.chunkSize).forEach {
-            steps.add(MockStep(script.replyDelay, replyDto(it)))
+        script.reply.chunked(script.chunkSize).forEachIndexed { index, chunk ->
+            steps.add(MockStep(script.replyDelay, replyDto(
+                chunk,
+                script.streamType,
+                if (index == 0) script.deviceIds else emptyList()
+            )))
         }
 
+        playSteps(script.question, steps)
+    }
+
+    private fun playSteps(question: String, steps: List<MockStep>) {
         var index = 0
         val runnable = object : Runnable {
             override fun run() {
                 if (!playing) return
                 if (index >= steps.size) {
                     playing = false
-                    onComplete?.invoke(script.question)
+                    onComplete?.invoke(question)
                     return
                 }
                 val step = steps[index++]
-                onNext?.invoke(script.question, true, step.dto)
+                onNext?.invoke(question, true, step.dto)
                 handler.postDelayed(this, step.delay)
             }
         }
@@ -63,8 +96,12 @@ class AiMockHttpRequest : AiHttpRequest() {
         choices = mutableListOf(AiResponseDto.Choice(delta = AiResponseDto.Delta(reasoning_content = content)))
     )
 
-    private fun replyDto(content: String) = AiResponseDto(
-        choices = mutableListOf(AiResponseDto.Choice(delta = AiResponseDto.Delta(content = content)))
+    private fun replyDto(content: String, streamType: AiResponseDto.StreamType, deviceIds: List<String>) = AiResponseDto(
+        streamType = streamType,
+        choices = mutableListOf(AiResponseDto.Choice(
+            delta = AiResponseDto.Delta(content = content),
+            attachdata = if (deviceIds.isEmpty()) null else AiResponseDto.AttachData(deviceIds)
+        ))
     )
 
     private class MockStep(val delay: Long, val dto: AiResponseDto)
@@ -81,7 +118,10 @@ data class MockScript(
     val keywords: List<String> = emptyList(),
     val chunkSize: Int = 4,
     val thinkDelay: Long = 70L,
-    val replyDelay: Long = 60L
+    val replyDelay: Long = 60L,
+    val streamType: AiResponseDto.StreamType = AiResponseDto.StreamType.Common,
+    val deviceIds: List<String> = emptyList(),
+    val complex: Boolean = false
 )
 
 /**
@@ -140,6 +180,21 @@ object AiMockScripts {
             reasoning = "这条回复用 CardView 标签包裹，适配器识别后会自动切换成卡片布局。",
             reply = "<CardView>这是一条卡片消息：AiChatStreamDemoXml 会根据内容标签切换 item 类型。</CardView>",
             chunkSize = 8
+        ),
+        MockScript(
+            question = "查一下我的智能家居设备",
+            keywords = listOf("智能家居", "设备列表", "high touch"),
+            reasoning = "这是高交互设备查询，将返回一句说明和关联设备标识。",
+            reply = "找到以下设备，可以继续查看或控制：",
+            streamType = AiResponseDto.StreamType.HighTouchInteraction,
+            deviceIds = listOf("device_light_living_room", "device_ac_bedroom", "device_curtain_living_room")
+        ),
+        MockScript(
+            question = "复杂",
+            keywords = listOf("复杂"),
+            reasoning = "随机交替普通文本流和高交互设备流，重复多个回合。",
+            reply = "复杂流式压测",
+            complex = true
         )
     )
 

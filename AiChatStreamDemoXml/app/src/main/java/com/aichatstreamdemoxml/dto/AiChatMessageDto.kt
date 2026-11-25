@@ -36,6 +36,12 @@ data class AiChatMessageDto(
     var reasoningExpanded: Boolean = true
 ) {
 
+    var streamType: String = "Common"
+    var deviceIds: List<String> = emptyList()
+    var deviceGroups: List<List<String>> = emptyList()
+    var deviceGroupEndOffsets: List<Int> = emptyList()
+    var deviceChange: (() -> Unit)? = null
+
     var reasonChange: ((solevar:String?) -> Unit)? = null
 
 

@@ -88,6 +88,12 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
         }
 
     private var firstResponseDto: AiResponseDto? = null
+    private data class DeviceReveal(val endOffset: Int, val ids: List<String>)
+    private val deviceReveals = mutableListOf<DeviceReveal>()
+    private val currentSegmentDeviceIds = linkedSetOf<String>()
+    private var currentReplyStreamType: AiResponseDto.StreamType? = null
+    private val revealedDeviceGroups = mutableListOf<List<String>>()
+    private val revealedDeviceOffsets = mutableListOf<Int>()
 
     fun isRequesting(): Boolean {
         LogHelper.e("AiHttpRequest", "onError-stateType" + stateType)
@@ -102,6 +108,11 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
         firstResponseDto = null
 
         replyOutBuilder.clear()
+        deviceReveals.clear()
+        currentSegmentDeviceIds.clear()
+        revealedDeviceGroups.clear()
+        revealedDeviceOffsets.clear()
+        currentReplyStreamType = null
         disposable?.dispose()
 
         // 等待状态由思考标题展示，正文留空，避免出现重复的“思考中”。
@@ -116,6 +127,7 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
                 appendData(isStream, data)
             }
             onComplete = { tag: Any? ->
+                finishCurrentDeviceSegment()
                 //因为是打字机效果，所以完成时，需要判断，是否输出完毕
                 if (replyBuilder.length == replyOutBuilder.length) {
                     LogHelper.e("AiHttpRequest", "onComplete1")
@@ -170,6 +182,12 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
         this.mAiChatMessageDto = null
         reasoningBuilder.clear()
         replyBuilder.clear()
+        replyOutBuilder.clear()
+        deviceReveals.clear()
+        currentSegmentDeviceIds.clear()
+        revealedDeviceGroups.clear()
+        revealedDeviceOffsets.clear()
+        currentReplyStreamType = null
         disposable?.dispose()
         waitRefreshType = false
     }
@@ -177,6 +195,24 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
 
     private fun appendData(isStream: Boolean, data: AiResponseDto?) {
         data ?: return
+        val responseText = data.choices.orEmpty().joinToString("") { it.delta?.content.orEmpty() }
+        if (responseText.isNotEmpty()) {
+            val nextStreamType = data.streamType
+            val attachedDeviceIds = data.choices.orEmpty().flatMap { it.attachdata?.deviceIds.orEmpty() }
+            if (currentReplyStreamType != null && currentReplyStreamType != nextStreamType) {
+                finishCurrentDeviceSegment()
+            }
+            // A new attachdata payload starts a distinct high-interaction segment,
+            // even when adjacent segments share the same streamType.
+            if (nextStreamType == AiResponseDto.StreamType.HighTouchInteraction &&
+                attachedDeviceIds.isNotEmpty() && currentSegmentDeviceIds.isNotEmpty()) {
+                finishCurrentDeviceSegment()
+            }
+            currentReplyStreamType = nextStreamType
+            if (nextStreamType == AiResponseDto.StreamType.HighTouchInteraction) {
+                currentSegmentDeviceIds.addAll(attachedDeviceIds)
+            }
+        }
         if (firstResponseDto == null) {
             firstResponseDto = data
             LogHelper.e("AiHttpRequest", "appendData updatefirstResponseDto=" + firstResponseDto.getPrintPrettyString())
@@ -232,6 +268,13 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
         LogHelper.e("AiStreamOutHelper", "appendData replyBuffer:" + replyBuilder.toString())
     }
 
+    private fun finishCurrentDeviceSegment() {
+        if (currentSegmentDeviceIds.isNotEmpty()) {
+            deviceReveals.add(DeviceReveal(replyBuilder.length, currentSegmentDeviceIds.toList()))
+            currentSegmentDeviceIds.clear()
+        }
+    }
+
 
     private fun outStream() {
         disposable = Observable.interval(0, 32, TimeUnit.MILLISECONDS)
@@ -243,6 +286,7 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
                     val nowChar = replyBuilder[replyOutBuilder.length]
                     LogHelper.e("outStream", "replyOutBuilder.length=${replyOutBuilder.length}")
                     replyOutBuilder.append(nowChar)
+                    revealDevicesReadyAt(replyOutBuilder.length)
 
 //                    val pattern1 = Regex("([*:：])\\s*\n")
 //                    val resultData = pattern1.replace(replyOutBuilder.toString().toDefault("")) { rep ->
@@ -282,6 +326,22 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
                     }
                 }
             }
+    }
+
+    private fun revealDevicesReadyAt(outputOffset: Int) {
+        val ready = deviceReveals.filter { it.endOffset <= outputOffset }
+        if (ready.isEmpty()) return
+        deviceReveals.removeAll(ready.toSet())
+        ready.forEach {
+            revealedDeviceGroups.add(it.ids)
+            revealedDeviceOffsets.add(it.endOffset)
+        }
+        mAiChatMessageDto?.let { message ->
+            message.deviceGroups = revealedDeviceGroups.toList()
+            message.deviceIds = revealedDeviceGroups.flatten()
+            message.deviceGroupEndOffsets = revealedDeviceOffsets.toList()
+            handler.post { message.deviceChange?.invoke() }
+        }
     }
 
     override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {

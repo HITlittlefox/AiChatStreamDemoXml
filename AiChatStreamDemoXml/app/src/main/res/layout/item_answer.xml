@@ -66,5 +66,19 @@
             android:textSize="15sp"
             tools:text="回答内容" />
 
+        <LinearLayout
+            android:id="@+id/device_chips_ll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/inline_reply_content_ll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
     </LinearLayout>
 </layout>

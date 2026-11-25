@@ -9,6 +9,7 @@ open class AiResponseDto(
     var choices: MutableList<Choice>? = null,
     var created: Int? = null,
     var id: String? = null,
+    var streamType: StreamType = StreamType.Common,
     var model: String? = null,
     var system_fingerprint: String? = null,
 ) {
@@ -19,6 +20,7 @@ open class AiResponseDto(
 
     data class Choice(
         var delta: Delta? = null,
+        var attachdata: AttachData? = null,
         var finish_reason: String? = null,
         var index: Int? = null,
         var logprobs: String? = null
@@ -34,5 +36,9 @@ open class AiResponseDto(
          */
         var reasoning_content: String? = null
     )
+
+    data class AttachData(val deviceIds: List<String> = emptyList())
+
+    enum class StreamType { Common, HighTouchInteraction }
 
 }
