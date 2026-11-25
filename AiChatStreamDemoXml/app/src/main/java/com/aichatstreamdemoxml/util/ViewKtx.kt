@@ -45,6 +45,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.aichatstreamdemoxml.AiChatAdapter
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.aichatstreamdemoxml.R
 import com.archeanx.libx.adapter.divider.XRvVerticalDivider
@@ -178,7 +179,12 @@ fun RecyclerView.scrollToBottom() {
 fun RecyclerView.keepTopOrFollowLastItem() {
     val adapter = adapter ?: return
     val layoutManager = layoutManager as? LinearLayoutManager ?: return
-    val lastPosition = adapter.itemCount - 1
+    val footerPosition = adapter.itemCount - 1
+    val lastPosition = if (footerPosition >= 0 && adapter.getItemViewType(footerPosition) == AiChatAdapter.TYPE_FOOTER) {
+        footerPosition - 1
+    } else {
+        footerPosition
+    }
     if (lastPosition < 0) return
     //最后一行是回答，它的上一行是提问
     val questionPosition = (lastPosition - 1).coerceAtLeast(0)
