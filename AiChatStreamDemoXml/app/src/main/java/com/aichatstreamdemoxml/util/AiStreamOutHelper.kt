@@ -104,10 +104,7 @@ class AiStreamOutHelper(val owner: LifecycleOwner) : LifecycleEventObserver {
         replyOutBuilder.clear()
         disposable?.dispose()
 
-        //初始化 思考内容
-        reasoningBuilder.append("思考中...")
-
-        reasoningBuilder.append("\n\n")
+        // 等待状态由思考标题展示，正文留空，避免出现重复的“思考中”。
         dto.reasoning_content = reasoningBuilder.toString()
         LogHelper.e("AiHttpRequest", "onInit update dto.reasoning_content=" + dto.reasoning_content)
         handler.post { updateType?.invoke(AiChatStateType.wait) }

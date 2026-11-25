@@ -172,6 +172,33 @@ fun RecyclerView.scrollToBottom() {
 }
 
 /**
+ * 最新一条内容不足一屏时保持顶部对齐（提问气泡停在右上角），
+ * 超过一屏后改为跟随到底部
+ */
+fun RecyclerView.keepTopOrFollowLastItem() {
+    val adapter = adapter ?: return
+    val layoutManager = layoutManager as? LinearLayoutManager ?: return
+    val lastPosition = adapter.itemCount - 1
+    if (lastPosition < 0) return
+    //最后一行是回答，它的上一行是提问
+    val questionPosition = (lastPosition - 1).coerceAtLeast(0)
+    val questionHolder = findViewHolderForAdapterPosition(questionPosition)
+    val answerHolder = findViewHolderForAdapterPosition(lastPosition)
+    if (questionHolder == null || answerHolder == null) {
+        //提问已经滚出屏幕（内容超过一屏），直接跟随底部
+        onScrollToLastItemBottom()
+        return
+    }
+    val availableHeight = height - paddingTop - paddingBottom
+    val contentHeight = questionHolder.itemView.height + (answerHolder?.itemView?.height ?: 0)
+    if (contentHeight <= availableHeight) {
+        layoutManager.scrollToPositionWithOffset(questionPosition, 0)
+    } else {
+        onScrollToLastItemBottom()
+    }
+}
+
+/**
  * 滑动到屏幕中最后一个item的地步
  */
 fun RecyclerView.onScrollToLastItemBottom() {

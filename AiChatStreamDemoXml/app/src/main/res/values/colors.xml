@@ -63,4 +63,12 @@
     <color name="ai_adabba">#ADABBA</color>
     <color name="ai_b1cdfc">#B1CDFC</color>
 
+    <!-- 对话页视觉 -->
+    <color name="ai_chat_bg">#FAFAFB</color>
+    <color name="ai_question_bubble">#E9EFFB</color>
+    <color name="ai_reply_text">#1F1F1F</color>
+    <color name="ai_reasoning_text">#8A8A93</color>
+    <color name="ai_input_bg">#F1F3F5</color>
+    <color name="ai_icon_tint">#5F6368</color>
+
 </resources>

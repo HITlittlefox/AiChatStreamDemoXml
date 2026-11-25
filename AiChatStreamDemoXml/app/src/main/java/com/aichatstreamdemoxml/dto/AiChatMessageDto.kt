@@ -28,7 +28,12 @@ data class AiChatMessageDto(
     /**
      * 回复状态
      */
-    var localReplyState: String? = null
+    var localReplyState: String? = null,
+
+    /**
+     * 思考过程是否展开
+     */
+    var reasoningExpanded: Boolean = true
 ) {
 
     var reasonChange: ((solevar:String?) -> Unit)? = null

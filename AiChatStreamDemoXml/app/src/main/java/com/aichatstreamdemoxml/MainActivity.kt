@@ -3,16 +3,23 @@ package com.aichatstreamdemoxml
 
 import android.app.Dialog
 import android.content.Intent
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.aichatstreamdemoxml.databinding.ActivityMainBinding
@@ -28,8 +35,8 @@ import com.aichatstreamdemoxml.util.LogHelper
 import com.aichatstreamdemoxml.util.ScrollBoundaryDeciderAdapter
 import com.aichatstreamdemoxml.util.TouchEmptyCloseKeyBoardUtils
 import com.aichatstreamdemoxml.util.initAdapter
+import com.aichatstreamdemoxml.util.keepTopOrFollowLastItem
 import com.aichatstreamdemoxml.util.linear
-import com.aichatstreamdemoxml.util.onScrollToLastItemBottom
 import com.aichatstreamdemoxml.util.onVisibility
 import com.aichatstreamdemoxml.util.scrollToBottom
 import com.aichatstreamdemoxml.util.uiDelayShow
@@ -64,6 +71,9 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
      * 是否需要自动滚动到底部
      */
     private var isAutoScrollBottom = true
+
+    /** 新问题定位在顶部时，为回答内容预留一屏滚动空间。 */
+    private var anchoredQuestionPosition: Int? = null
 
 
     /**
@@ -164,7 +174,9 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
             }
         })
 
-        binding.recyclerView.linear().initAdapter(mChatAdapter).verDivider(60f, com.archeanx.libx.style.R.color.transparent)
+        // Keep only a small breathing space between chat rows; large per-row dividers
+        // accumulate because each turn is rendered as separate question/answer items.
+        binding.recyclerView.linear().initAdapter(mChatAdapter).verDivider(12f, com.archeanx.libx.style.R.color.transparent)
 
 
         //监听滑动，显示底部按钮
@@ -173,6 +185,7 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
                 super.onScrollStateChanged(recyclerView, newState)
                 when (newState) {
                     RecyclerView.SCROLL_STATE_DRAGGING -> {
+                        clearQuestionAnchor()
                         isAutoScrollBottom = false
                         //  mHelper.onScrollViewVisibility(binding.scrollBottomIv, !isAutoScrollBottom)
                         binding.scrollBottomIv.onVisibility(false)
@@ -241,7 +254,7 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
             }
         })
         //发送按钮
-        binding.sendTv.setOnClickNoDouble {
+        binding.sendIv.setOnClickNoDouble {
             if (onSubmitQuestion(binding.inputEt.editableText.toString())) {
                 binding.inputEt.setText("")
             }
@@ -286,7 +299,7 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
         }
 
 
-        mTouchEmptyCloseKeyBoardUtils.filterViews.add(binding.sendTv)
+        mTouchEmptyCloseKeyBoardUtils.filterViews.add(binding.sendIv)
 
 
         binding.titleTv.setOnClickNoDouble {
@@ -343,29 +356,100 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
                 }
             }
         }
-        if (msgDto == null) {
+        val isNewQuestion = msgDto == null
+        if (isNewQuestion) {
             msgDto = AiChatMessageDto()
             msgDto?.solevar = UUID.randomUUID().toString()
             msgDto?.question = content
-            mChatAdapter.addData(msgDto!!)
         }
-
 
         //模拟批次进行中，或 Debug 下命中脚本关键词时走 Mock 请求，其余情况走真实网络
         val hitMockScript = BuildConfig.DEBUG && AiMockScripts.match(content) != null
         val request = if (isMockRunning || hitMockScript) mMockHttpRequest else mAiHttpRequest
-        //输出交给 AiStreamOutHelper 统一处理
-        mAiStreamOutHelper.onInit(msgDto!!, request)
+        val dto = msgDto!!
 
+        val startRequest = {
+            //输出交给 AiStreamOutHelper 统一处理
+            mAiStreamOutHelper.onInit(dto, request)
+            //关闭软键盘
+            KeyBoardUtils.closeKeyboard(binding.inputEt, this)
+            uiDelayShow({
+                //需要判断有选中的会话，如果没有，则是需要生成新的对话id和对话内容
+                request.onRequest(content)
+            }, 300)
+        }
 
-        //关闭软键盘
-        KeyBoardUtils.closeKeyboard(binding.inputEt, this)
-
-        uiDelayShow({
-            //需要判断有选中的会话，如果没有，则是需要生成新的对话id和对话内容
-            request.onRequest(content)
-        }, 300)
+        if (isNewQuestion) {
+            if (isMockRunning) {
+                //模拟批次不做动画，直接插入并顶到顶部
+                addQuestionItemAndSnap(dto)
+                startRequest()
+            } else {
+                //新提问：气泡从输入框飞向右上角，落位后再插入列表
+                playFlyToQuestionAnimation(content ?: "") {
+                    addQuestionItemAndSnap(dto)
+                    startRequest()
+                }
+            }
+        } else {
+            startRequest()
+        }
         return true
+    }
+
+    /**
+     * 插入提问并让这条 item 顶部对齐列表顶部
+     */
+    private fun addQuestionItemAndSnap(data: AiChatMessageDto) {
+        //新提问默认恢复自动跟随，避免之前上滑的状态把气泡顶回底部
+        isAutoScrollBottom = true
+        binding.scrollBottomIv.onVisibility(false)
+        mChatAdapter.addData(data)
+        val questionPosition = mChatAdapter.questionPosition(mChatAdapter.listData.size - 1)
+        anchoredQuestionPosition = questionPosition
+        mChatAdapter.footerHeight = binding.recyclerView.height
+        binding.recyclerView.post {
+            (binding.recyclerView.layoutManager as? LinearLayoutManager)
+                ?.scrollToPositionWithOffset(questionPosition, 0)
+            updateQuestionFooterHeight(questionPosition)
+        }
+    }
+
+    /** Keep the latest question at the top while its answer grows; consume only unused viewport space. */
+    private fun updateQuestionFooterHeight(questionPosition: Int) {
+        val recycler = binding.recyclerView
+        val question = recycler.findViewHolderForAdapterPosition(questionPosition)?.itemView
+        val answer = recycler.findViewHolderForAdapterPosition(questionPosition + 1)?.itemView
+        if (question == null || answer == null) return
+        val usedHeight = question.height + answer.height
+        mChatAdapter.footerHeight = (recycler.height - recycler.paddingTop - recycler.paddingBottom - usedHeight)
+            .coerceAtLeast(0)
+    }
+
+    private fun clearQuestionAnchor() {
+        anchoredQuestionPosition = null
+    }
+
+    /**
+     * 发送动画：气泡从输入框位置飞向列表右上角，落位后回调
+     */
+    private fun playFlyToQuestionAnimation(text: String, onEnd: () -> Unit) {
+        val recycler = binding.recyclerView
+        if (text.isEmpty() || recycler.height == 0) {
+            onEnd()
+            return
+        }
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        // Insert the turn first, then move the whole conversation viewport upward
+        // together so existing messages and the new question share one motion.
+        onEnd()
+        recycler.translationY = dp(42).toFloat()
+        recycler.animate()
+            .translationY(0f)
+            .setDuration(360L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
     }
 
     /**
@@ -410,8 +494,12 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
         if (index != -1) {
             if (oldStateType != stateType) {
                 item.localReplyState = stateType
+                if (stateType == AiChatStateType.out_end) {
+                    //输出结束，折叠思考过程
+                    item.reasoningExpanded = false
+                }
                 binding.recyclerView.post {
-                    mChatAdapter.notifyItemChanged(index)
+                    mChatAdapter.notifyItemChanged(mChatAdapter.answerPosition(index))
                 }
             } else {
                 binding.recyclerView.post {
@@ -430,7 +518,7 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
                         }
 
                         else -> {
-                            mChatAdapter.notifyItemChanged(index)
+                            mChatAdapter.notifyItemChanged(mChatAdapter.answerPosition(index))
                         }
                     }
                 }
@@ -438,20 +526,23 @@ class MainActivity : XBaseBindingActivity<ActivityMainBinding>(R.layout.activity
 
             LogHelper.e("updateItem", "isAutoScrollBottom:" + isAutoScrollBottom.toString() + " s-state:" + stateType + " oldStateType:" + oldStateType)
             //提示滚动按钮展示时，不自动滚动到底部
-            if (isAutoScrollBottom) {
+            if (anchoredQuestionPosition != null || isAutoScrollBottom) {
                 binding.recyclerView.post {
-//                    if (oldStateType != stateType) {
-//                        //判断rv是否已经滑动到底部，没有则滑动到底部
-////                    LogHelper.e("updateItem", "state:" + stateType + " scrollToBottom")
-//                        binding.recyclerView.scrollToBottom()
-//                    } else {
-//                        if (binding.recyclerView.canScrollVertically(1)) {
-////                        LogHelper.e("updateItem", "state:" + stateType + " onScrollToLastItemBottom")
-//                            binding.recyclerView.onScrollToLastItemBottom()
-//                        }
-//                    }
+                    //内容不足一屏时把提问顶在右上角，超过一屏再跟随底部
+                    val anchor = anchoredQuestionPosition
+                    if (anchor != null) {
+                        val layoutManager = binding.recyclerView.layoutManager as? LinearLayoutManager
+                        layoutManager?.scrollToPositionWithOffset(anchor, 0)
+                        binding.recyclerView.post { updateQuestionFooterHeight(anchor) }
+                    } else {
+                        binding.recyclerView.keepTopOrFollowLastItem()
+                    }
                 }
             } else {
+                // User scrolling cancels the top lock, but the footer still tracks
+                // the latest turn's unused viewport space throughout the response.
+                val latestQuestionPosition = mChatAdapter.questionPosition(mChatAdapter.listData.lastIndex)
+                binding.recyclerView.post { updateQuestionFooterHeight(latestQuestionPosition) }
                 //就算当前不需要自动滑动到底部，当有新的提问时，也需要滑动到底部
                 if (stateType == AiChatStateType.wait) {
                     binding.scrollBottomIv.performClick()
